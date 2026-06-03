@@ -20,7 +20,15 @@ set -euo pipefail
 
 # ---- config ----------------------------------------------------------------
 ARCH="${ARCH:-aarch64}"
-REPO="${TERMUX_REPO:-https://packages.termux.dev/apt/termux-main}"
+# Two repos: python/openssl/libnl live in termux-main; the WPS tools
+# (pixiewps, wpa-supplicant, iw) live in the separate termux-root repo.
+# Each entry is "<base-url> <dist>/<component>".
+MAIN_REPO="${TERMUX_MAIN_REPO:-https://packages.termux.dev/apt/termux-main}"
+ROOT_REPO="${TERMUX_ROOT_REPO:-https://packages.termux.dev/apt/termux-root}"
+REPOS=(
+  "$MAIN_REPO dists/stable/main/binary-$ARCH/Packages"
+  "$ROOT_REPO dists/root/stable/binary-$ARCH/Packages"
+)
 ONESHOT_REPO="${ONESHOT_REPO:-https://github.com/kimocoder/OneShot.git}"
 # Root packages; their dependency closure is resolved automatically.
 ROOT_PKGS=(python pixiewps wpa-supplicant iw openssl libnl)
@@ -46,24 +54,30 @@ fetch() {  # fetch <url> <out>
 }
 
 # ---- 1) package index ------------------------------------------------------
-echo "[*] Fetching Termux package index ($ARCH)..."
-fetch "$REPO/dists/stable/main/binary-$ARCH/Packages.xz" "$WORK/Packages.xz"
-xz -d "$WORK/Packages.xz"
-IDX="$WORK/Packages"
-
-declare -A FILE DEPS
-while IFS=$'\t' read -r pkg file deps; do
-  [[ -n "$pkg" ]] || continue
-  FILE["$pkg"]="$file"
-  DEPS["$pkg"]="$deps"
-done < <(perl -ne '
-  if (/^Package:\s*(\S+)/) { $p=$1 }
-  elsif (/^Filename:\s*(\S+)/) { $f=$1 }
-  elsif (/^Depends:\s*(.+)/) { $d=$1 }
-  elsif (/^\s*$/ && defined $p) {
-    $d //= ""; $d =~ s/\([^)]*\)//g; $d =~ s/\s+//g;
-    print "$p\t$f\t$d\n"; undef $p; undef $f; undef $d;
-  }' "$IDX")
+# URL[pkg] holds the full .deb download URL (the repo base is folded in so the
+# two repos can be merged into one map); DEPS[pkg] holds its dependency list.
+declare -A URL DEPS
+i=0
+for entry in "${REPOS[@]}"; do
+  base="${entry%% *}"; path="${entry#* }"
+  echo "[*] Fetching package index: $base ($ARCH)..."
+  idx="$WORK/idx.$((i++))"
+  fetch "$base/$path" "$idx"
+  while IFS=$'\t' read -r pkg file deps; do
+    [[ -n "$pkg" ]] || continue
+    # First repo wins for a given package (main before root).
+    [[ -n "${URL[$pkg]:-}" ]] && continue
+    URL["$pkg"]="$base/$file"
+    DEPS["$pkg"]="$deps"
+  done < <(perl -ne '
+    if (/^Package:\s*(\S+)/) { $p=$1 }
+    elsif (/^Filename:\s*(\S+)/) { $f=$1 }
+    elsif (/^Depends:\s*(.+)/) { $d=$1 }
+    elsif (/^\s*$/ && defined $p) {
+      $d //= ""; $d =~ s/\([^)]*\)//g; $d =~ s/\s+//g;
+      print "$p\t$f\t$d\n"; undef $p; undef $f; undef $d;
+    }' "$idx")
+done
 
 # ---- 2) resolve dependency closure (BFS) -----------------------------------
 echo "[*] Resolving dependencies..."
@@ -74,7 +88,7 @@ while ((${#queue[@]})); do
   p="${queue[0]}"; queue=("${queue[@]:1}")
   [[ -n "${SEEN[$p]:-}" ]] && continue
   [[ " $SKIP_PKGS " == *" $p "* ]] && continue
-  [[ -z "${FILE[$p]:-}" ]] && continue        # virtual / unknown -> skip
+  [[ -z "${URL[$p]:-}" ]] && continue         # virtual / unknown -> skip
   SEEN[$p]=1
   resolved+=("$p")
   IFS=',' read -ra ds <<< "${DEPS[$p]:-}"
@@ -88,7 +102,7 @@ echo "[+] ${#resolved[@]} packages: ${resolved[*]}"
 # ---- 3) download + extract -------------------------------------------------
 for p in "${resolved[@]}"; do
   echo "[*] fetch $p"
-  fetch "$REPO/${FILE[$p]}" "$WORK/$p.deb"
+  fetch "${URL[$p]}" "$WORK/$p.deb"
   dpkg-deb -x "$WORK/$p.deb" "$WORK/x/$p"
 done
 
