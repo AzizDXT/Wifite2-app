@@ -1,0 +1,2 @@
+# The payload/ directory (wifite source + ARM binaries) is generated here by
+# scripts/prepare_assets.sh before building. It is intentionally git-ignored.

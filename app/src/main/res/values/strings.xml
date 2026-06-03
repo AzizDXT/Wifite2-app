@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Wifite2</string>
+    <string name="root_ok">Root: granted ✓</string>
+    <string name="root_missing">Root: NOT available ✗</string>
+    <string name="hint_iface">Monitor interface (e.g. wlan1)</string>
+    <string name="hint_args">Extra wifite args (optional, e.g. --wpa --kill)</string>
+    <string name="btn_check">Check Root</string>
+    <string name="btn_install">Install Payload</string>
+    <string name="btn_start">Start</string>
+    <string name="btn_stop">Stop</string>
+</resources>

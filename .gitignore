@@ -1,0 +1,17 @@
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+*.apk
+*.aab
+*.keystore
+
+# Bundled payload (fetched locally by scripts/prepare_assets.sh — NOT committed)
+app/src/main/assets/payload/
+
+# Vendored external sources
+external/
+/tmp/
