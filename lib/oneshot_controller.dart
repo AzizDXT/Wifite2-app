@@ -108,7 +108,10 @@ class OneShotController extends ChangeNotifier {
       return;
     }
     final base = _payload!.path;
-    final cmd = 'cd $base && export PATH=$base/bin:\$PATH && '
+    final cmd = 'cd $base && '
+        'export PATH=$base/bin:\$PATH && '
+        'export LD_LIBRARY_PATH=$base/lib:\$LD_LIBRARY_PATH && '
+        'export PYTHONHOME=$base && '
         'export PYTHONDONTWRITEBYTECODE=1 && '
         '$base/bin/python3 $base/oneshot.py ${settings.buildFlags()}';
 

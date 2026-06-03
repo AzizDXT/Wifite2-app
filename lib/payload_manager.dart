@@ -36,6 +36,11 @@ class PayloadManager {
     final client = http.Client();
     try {
       final resp = await client.send(http.Request('GET', Uri.parse(url)));
+      if (resp.statusCode == 404) {
+        throw const HttpException(
+            'payload.zip not found (404) — publish it with '
+            'scripts/build_payload.sh, or set the URL in Advanced options');
+      }
       if (resp.statusCode != 200) {
         throw HttpException('HTTP ${resp.statusCode} fetching payload');
       }

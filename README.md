@@ -67,7 +67,7 @@ lib/
   screens/home_screen.dart  the UI
   widgets/console_view.dart auto-scrolling log console
 scripts/setup_android.sh    generate android/ host + inject permissions
-scripts/prepare_assets.sh   build dist/payload.zip for a GitHub release
+scripts/build_payload.sh    auto-build dist/payload.zip (Termux aarch64) + publish
 ```
 
 The Android host folder (`android/`) is **not committed** —
@@ -89,14 +89,23 @@ flutter build apk --release
 #   -> build/app/outputs/flutter-apk/app-release.apk
 ```
 
-### One-time: publish the payload the app will download
+### One-time: publish the payload the app downloads (fixes the runtime 404)
+`scripts/build_payload.sh` builds `dist/payload.zip` **fully automatically** —
+it pulls the aarch64 binaries (python3, pixiewps, wpa_supplicant, iw + their
+libs and the Python stdlib) from the Termux apt repo with dependency
+resolution, adds `oneshot.py`, and zips it. No device or manual copying.
+
 ```bash
-./scripts/prepare_assets.sh      # clones OneShot; you add arm64 binaries
-gh release create v0.1.0 dist/payload.zip   # upload payload.zip to a release
+# build only:
+./scripts/build_payload.sh
+
+# build AND publish to a GitHub release (so the default URL resolves):
+PUBLISH=1 TAG=v0.1.0 ./scripts/build_payload.sh
 ```
 The app's default download URL is
 `https://github.com/AzizDXT/Wifite2-app/releases/latest/download/payload.zip`
-(editable in **Advanced options**).
+(editable in **Advanced options**). The binaries are launched with
+`LD_LIBRARY_PATH`/`PYTHONHOME` pointed at the extracted `lib/`.
 
 ### Install on the rooted Pixel
 ```bash
