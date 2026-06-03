@@ -1,60 +1,57 @@
 #!/usr/bin/env bash
 #
-# prepare_assets.sh — populate app/src/main/assets/payload/ before building.
+# prepare_assets.sh — build assets/payload.zip before `flutter build apk`.
 #
-# Run this on your workstation (needs network + arm64 binaries). It:
-#   1. Clones the OneShot Python source into the payload.
-#   2. Reminds you to drop the arm64 binaries OneShot calls into payload/bin.
-#
-# The payload is bundled into the APK and extracted at runtime by AssetInstaller.
+# Run on your workstation (needs network + arm64 binaries). It:
+#   1. Clones the OneShot source.
+#   2. Assembles a payload tree (oneshot.py + bin/ + lib/).
+#   3. Zips it to assets/payload.zip, which the app extracts at runtime.
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ASSETS="$ROOT/app/src/main/assets/payload"
+ASSETS="$ROOT/assets"
 TMP="$(mktemp -d)"
+PAYLOAD="$TMP/payload"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "[*] Payload dir: $ASSETS"
-mkdir -p "$ASSETS/bin"
+mkdir -p "$ASSETS" "$PAYLOAD/bin" "$PAYLOAD/lib"
 
 # ---------------------------------------------------------------------------
 # 1) OneShot source
 # ---------------------------------------------------------------------------
 echo "[*] Cloning OneShot (kimocoder fork)..."
 git clone --depth 1 https://github.com/kimocoder/OneShot.git "$TMP/OneShot"
-cp "$TMP/OneShot/oneshot.py" "$ASSETS/oneshot.py"
-# OneShot is largely single-file; copy any extra modules/data it ships with.
+cp "$TMP/OneShot/oneshot.py" "$PAYLOAD/oneshot.py"
 for extra in pixiewps wps *.py; do
-  [ -e "$TMP/OneShot/$extra" ] && cp -r "$TMP/OneShot/$extra" "$ASSETS/" 2>/dev/null || true
+  [ -e "$TMP/OneShot/$extra" ] && cp -r "$TMP/OneShot/$extra" "$PAYLOAD/" 2>/dev/null || true
 done
-echo "[+] OneShot source copied"
+echo "[+] OneShot source staged"
 
 # ---------------------------------------------------------------------------
-# 2) arm64 binaries — YOU must supply these
+# 2) arm64 binaries — YOU must supply these into $PAYLOAD/bin (and libs in /lib)
 # ---------------------------------------------------------------------------
-cat <<'EOF'
+cat <<EOF
 
-[!] ACTION REQUIRED: place arm64 (aarch64) binaries in payload/bin/
+[!] ACTION REQUIRED before zipping: copy arm64 (aarch64) binaries into:
+      $PAYLOAD/bin   -> python3 wpa_supplicant pixiewps iw
+      $PAYLOAD/lib   -> the *.so they link against (+ python3 stdlib)
 
-    Required by OneShot:
-      python3          self-contained arm64 build (+ stdlib in payload/lib)
-      wpa_supplicant   OneShot drives it via its control socket
-      pixiewps         offline Pixie Dust PIN computation
-      iw               wireless interface control
+    OneShot does NOT need monitor mode — it uses wpa_supplicant on a managed
+    interface, so the phone's internal wlan0 works (root required).
 
-    NOTE: OneShot does NOT need monitor mode — it uses wpa_supplicant on a
-    managed interface, so the phone's internal wlan0 works (root required).
+    Easiest source (Termux):
+      pkg install python pixiewps wpa-supplicant iw
+      cp \$PREFIX/bin/{python3,pixiewps,wpa_supplicant,iw}  $PAYLOAD/bin/
+      cp -r \$PREFIX/lib/python3.* \$PREFIX/lib/*.so        $PAYLOAD/lib/
 
-    Where to get arm64 builds:
-      - Termux:   pkg install python pixiewps wpa-supplicant iw
-                  then copy $PREFIX/bin/<tool> and the $PREFIX/lib/*.so they
-                  link against into payload/bin and payload/lib
-      - Kali NetHunter chroot: copy /usr/bin/<tool> (+ their libs)
-      - Build from source with the Android NDK
-
-    Verify arch:  file payload/bin/pixiewps   # -> ARM aarch64
-
+    Press Enter once the binaries are in place to build the zip (Ctrl-C to abort).
 EOF
+read -r _
 
-echo "[*] Done. Now build:  ./gradlew assembleDebug"
+# ---------------------------------------------------------------------------
+# 3) zip into the Flutter asset
+# ---------------------------------------------------------------------------
+( cd "$PAYLOAD" && zip -qr "$ASSETS/payload.zip" . )
+echo "[+] Wrote $ASSETS/payload.zip"
+echo "[*] Now: flutter pub get && flutter build apk --release"

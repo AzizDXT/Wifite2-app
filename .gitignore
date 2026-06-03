@@ -1,18 +1,24 @@
-# Android / Gradle
-.gradle/
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
 build/
-local.properties
 *.iml
 .idea/
-captures/
-*.apk
-*.aab
-*.keystore
 
-# Bundled payload (OneShot source + arm64 binaries) — fetched locally by
+# Generated platform host folders (run `flutter create .` to regenerate)
+/android/
+/ios/
+/linux/
+/macos/
+/windows/
+/web/
+
+# Bundled payload (OneShot source + arm64 binaries) — built locally by
 # scripts/prepare_assets.sh, NOT committed
-app/src/main/assets/payload/
+assets/payload.zip
 
-# Vendored external sources
+# Vendored external sources / temp
 external/
 /tmp/
