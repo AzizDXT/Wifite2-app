@@ -1,5 +1,7 @@
 # OneShot-app — Flutter (APK) wrapper for OneShot
 
+[![CI](https://github.com/AzizDXT/Wifite2-app/actions/workflows/ci.yml/badge.svg)](https://github.com/AzizDXT/Wifite2-app/actions/workflows/ci.yml)
+
 A **Flutter** Android app with a calm, professional UI that bundles the
 [OneShot](https://github.com/kimocoder/OneShot) WPS-attack tool plus the arm64
 binaries it needs, extracts them at runtime, and runs OneShot **as root** —
@@ -102,6 +104,19 @@ flutter install            # or: adb install -r build/app/outputs/flutter-apk/ap
 5. Watch the console; **Stop** kills OneShot and its `wpa_supplicant`.
 
 ---
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs on every push/PR (and manually via
+*workflow_dispatch*):
+
+- **analyze** — `flutter pub get`, format check (informational), `flutter
+  analyze`, and `flutter test` (widget smoke test).
+- **build-apk** — generates the `android/` host on the fly, uses a
+  **placeholder** `payload.zip`, builds a debug APK, and uploads it as an
+  artifact. This is a *compile-check only* — the CI APK has no real binaries
+  and won't function. Build a working APK locally with real arm64 binaries
+  (see [Build](#build)).
 
 ## How it works
 

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, 'claude/**' ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.24.5'
+
+jobs:
+  analyze:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Format check (informational)
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Unit / widget tests
+        run: flutter test
+
+  build-apk:
+    name: Build APK (compile-check)
+    needs: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # The android/ host folder is git-ignored; generate it into a temp
+      # project and copy it in so we never overwrite our pubspec/lib.
+      - name: Generate Android host project
+        run: |
+          flutter create --org run.taleb --project-name oneshot \
+            --platforms=android "${RUNNER_TEMP}/host"
+          cp -r "${RUNNER_TEMP}/host/android" ./android
+
+      # Real binaries are user-supplied; CI uses a placeholder so the asset
+      # exists and the project compiles. The resulting APK is NOT functional.
+      - name: Create placeholder payload.zip
+        run: |
+          mkdir -p assets
+          printf 'placeholder' > placeholder.txt
+          zip -q assets/payload.zip placeholder.txt
+          rm placeholder.txt
+
+      - run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
