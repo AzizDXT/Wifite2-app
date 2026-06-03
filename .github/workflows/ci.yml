@@ -35,7 +35,7 @@ jobs:
         run: flutter test
 
   build-apk:
-    name: Build APK (compile-check)
+    name: Build APK
     needs: analyze
     runs-on: ubuntu-latest
     steps:
@@ -52,22 +52,9 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      # The android/ host folder is git-ignored; generate it into a temp
-      # project and copy it in so we never overwrite our pubspec/lib.
-      - name: Generate Android host project
-        run: |
-          flutter create --org run.taleb --project-name oneshot \
-            --platforms=android "${RUNNER_TEMP}/host"
-          cp -r "${RUNNER_TEMP}/host/android" ./android
-
-      # Real binaries are user-supplied; CI uses a placeholder so the asset
-      # exists and the project compiles. The resulting APK is NOT functional.
-      - name: Create placeholder payload.zip
-        run: |
-          mkdir -p assets
-          printf 'placeholder' > placeholder.txt
-          zip -q assets/payload.zip placeholder.txt
-          rm placeholder.txt
+      # Generate the git-ignored android/ host and inject permissions.
+      - name: Set up Android host
+        run: ./scripts/setup_android.sh
 
       - run: flutter pub get
 

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'oneshot_settings.dart';
-import 'payload_installer.dart';
+import 'payload_manager.dart';
 import 'root_shell.dart';
 
 /// Holds UI state + persisted [OneShotSettings] and drives OneShot via root.
@@ -15,6 +15,8 @@ class OneShotController extends ChangeNotifier {
   bool loaded = false;
   bool? rootGranted; // null = not checked yet
   bool installed = false;
+  bool installing = false;
+  double? progress; // download progress 0–1 (null = unknown/indeterminate)
   bool running = false;
 
   final List<String> log = [];
@@ -38,6 +40,48 @@ class OneShotController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// One-shot startup: check root, then download+install the payload if it
+  /// isn't already present. Everything here runs automatically on launch.
+  Future<void> autoSetup() async {
+    await checkRoot();
+    await ensurePayload();
+  }
+
+  /// Ensures the payload is installed. Downloads it when missing (or when
+  /// [force] is set, e.g. a manual re-download).
+  Future<void> ensurePayload({bool force = false}) async {
+    if (installing) return;
+    installing = true;
+    progress = null;
+    notifyListeners();
+    try {
+      if (!force && await PayloadManager.isInstalled()) {
+        _payload = await PayloadManager.dir();
+        installed = true;
+        _log('[+] Payload already installed');
+        return;
+      }
+      _payload = await PayloadManager.downloadAndInstall(
+        settings.payloadUrl,
+        onLog: _log,
+        onProgress: (p) {
+          progress = p;
+          notifyListeners();
+        },
+      );
+      installed = File('${_payload!.path}/oneshot.py').existsSync();
+      _log(installed
+          ? '[+] Payload ready'
+          : '[!] oneshot.py missing from the downloaded archive');
+    } catch (e) {
+      _log('[!] Payload setup failed: $e');
+    } finally {
+      installing = false;
+      progress = null;
+      notifyListeners();
+    }
+  }
+
   /// Mutate settings, persist, and rebuild. Used by every input.
   void update(void Function(OneShotSettings) change) {
     change(settings);
@@ -55,19 +99,6 @@ class OneShotController extends ChangeNotifier {
     _log(rootGranted!
         ? '[+] Root access granted'
         : '[!] No root access (su failed)');
-  }
-
-  Future<void> install() async {
-    try {
-      _payload = await PayloadInstaller.install(_log);
-      installed = File('${_payload!.path}/oneshot.py').existsSync();
-      _log(installed
-          ? '[+] Payload ready'
-          : '[!] oneshot.py missing — did you run prepare_assets.sh?');
-    } catch (e) {
-      _log('[!] Install failed: $e');
-    }
-    notifyListeners();
   }
 
   Future<void> start() async {

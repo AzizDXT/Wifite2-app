@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _pin = TextEditingController();
   final _delay = TextEditingController();
   final _vuln = TextEditingController();
+  final _url = TextEditingController();
 
   @override
   void initState() {
@@ -32,6 +33,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _pin.text = s.pin;
       _delay.text = s.delay;
       _vuln.text = s.vulnList;
+      _url.text = s.payloadUrl;
+      // Everything automatic: check root + fetch/extract the payload on launch.
+      _c.autoSetup();
     });
   }
 
@@ -43,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pin.dispose();
     _delay.dispose();
     _vuln.dispose();
+    _url.dispose();
     super.dispose();
   }
 
@@ -185,9 +190,20 @@ class _HomeScreenState extends State<HomeScreen> {
           childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
           title: const Text('Show all parameters',
               style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.ink)),
-          subtitle: const Text('Delay, list file, and toggles',
+          subtitle: const Text('Payload source, delay, list file, and toggles',
               style: TextStyle(color: AppTheme.inkMuted, fontSize: 13)),
           children: [
+            _fieldLabel('Payload download URL', 'payload.zip'),
+            const SizedBox(height: 8),
+            _text(
+              _url,
+              hint: OneShotSettings.defaultPayloadUrl,
+              onChanged: (v) => _c.update((st) =>
+                  st.payloadUrl = v.trim().isEmpty
+                      ? OneShotSettings.defaultPayloadUrl
+                      : v.trim()),
+            ),
+            const SizedBox(height: 18),
             _fieldLabel('Delay between attempts', '-d · seconds'),
             const SizedBox(height: 8),
             _text(
@@ -229,25 +245,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _setupCard(ThemeData t) {
+    final (IconData icon, Color color, String label) = _c.installed
+        ? (Icons.check_circle_rounded, AppTheme.ok, 'Payload installed')
+        : _c.installing
+            ? (
+                Icons.downloading_rounded,
+                AppTheme.seed,
+                _c.progress == null
+                    ? 'Preparing…'
+                    : 'Downloading ${(_c.progress! * 100).round()}%'
+              )
+            : (
+                Icons.cloud_download_outlined,
+                const Color(0xFF9AA5B1),
+                'Payload not installed'
+              );
+
     return _card(
-      Row(
+      Column(
         children: [
-          Icon(
-            _c.installed
-                ? Icons.check_circle_rounded
-                : Icons.inventory_2_outlined,
-            size: 22,
-            color: _c.installed ? AppTheme.ok : const Color(0xFF9AA5B1),
+          Row(
+            children: [
+              Icon(icon, size: 22, color: color),
+              const SizedBox(width: 14),
+              Expanded(child: Text(label, style: t.textTheme.titleSmall)),
+              if (_c.installing)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                IconButton(
+                  tooltip: 'Re-download',
+                  onPressed: () => _c.ensurePayload(force: true),
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              _c.installed ? 'Payload installed' : 'Extract OneShot + binaries',
-              style: t.textTheme.titleSmall,
+          if (_c.installing) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: _c.progress,
+                minHeight: 6,
+                backgroundColor: AppTheme.fieldFill,
+              ),
             ),
-          ),
-          FilledButton.tonal(
-              onPressed: _c.install, child: const Text('Install')),
+          ],
         ],
       ),
     );

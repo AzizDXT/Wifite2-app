@@ -24,6 +24,15 @@ extension AttackModeX on AttackMode {
 /// All OneShot options, with (de)serialization and shell-argument building.
 /// Field-by-field this mirrors `oneshot.py`'s argparse.
 class OneShotSettings {
+  /// Where the runtime payload (OneShot + arm64 binaries) is downloaded from.
+  /// Upload your `payload.zip` to a GitHub release; `latest/download` always
+  /// resolves to the newest one.
+  static const defaultPayloadUrl =
+      'https://github.com/AzizDXT/Wifite2-app/releases/latest/download/payload.zip';
+
+  // Runtime
+  String payloadUrl; // download source for payload.zip
+
   // Primary
   String iface; // -i / --interface (required)
   String bssid; // -b / --bssid
@@ -45,6 +54,7 @@ class OneShotSettings {
   bool verbose; // -v / --verbose
 
   OneShotSettings({
+    this.payloadUrl = defaultPayloadUrl,
     this.iface = 'wlan0',
     this.bssid = '',
     this.pin = '',
@@ -91,6 +101,7 @@ class OneShotSettings {
   static String _q(String s) => "'${s.replaceAll("'", r"'\''")}'";
 
   Map<String, dynamic> toMap() => {
+        'payloadUrl': payloadUrl,
         'iface': iface,
         'bssid': bssid,
         'pin': pin,
@@ -112,6 +123,7 @@ class OneShotSettings {
   factory OneShotSettings.fromJson(String s) {
     final m = jsonDecode(s) as Map<String, dynamic>;
     return OneShotSettings(
+      payloadUrl: m['payloadUrl'] as String? ?? defaultPayloadUrl,
       iface: m['iface'] as String? ?? 'wlan0',
       bssid: m['bssid'] as String? ?? '',
       pin: m['pin'] as String? ?? '',

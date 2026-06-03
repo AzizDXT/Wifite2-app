@@ -2,10 +2,11 @@
 
 [![CI](https://github.com/AzizDXT/Wifite2-app/actions/workflows/ci.yml/badge.svg)](https://github.com/AzizDXT/Wifite2-app/actions/workflows/ci.yml)
 
-A **Flutter** Android app with a calm, professional UI that bundles the
-[OneShot](https://github.com/kimocoder/OneShot) WPS-attack tool plus the arm64
-binaries it needs, extracts them at runtime, and runs OneShot **as root** —
-streaming its output to a live console. The APK is a *launcher/container* for
+A **Flutter** Android app with a calm, professional UI that **automatically
+downloads** the [OneShot](https://github.com/kimocoder/OneShot) WPS-attack tool
+plus the arm64 binaries it needs (`payload.zip`), extracts them, and runs
+OneShot **as root** — streaming its output to a live console. The APK itself is
+small; the payload is fetched at runtime. It's a *launcher/container* for
 OneShot, not a reimplementation.
 
 > ⚠️ **Read [LEGAL.md](LEGAL.md) first.** Authorized testing only.
@@ -23,7 +24,7 @@ phone's **internal `wlan0`** works with no external USB adapter.
 | 1 | **Root** (`su`) | ✅ |
 | 2 | Monitor mode / injection | ❌ not needed |
 | 3 | External USB adapter | ❌ not required (internal `wlan0`) |
-| 4 | **arm64 binaries** in the APK | `python3`, `wpa_supplicant`, `pixiewps`, `iw` |
+| 4 | **arm64 binaries** (`python3`, `wpa_supplicant`, `pixiewps`, `iw`) | auto-downloaded in `payload.zip` |
 
 > OneShot starts its own `wpa_supplicant`; Android's Wi‑Fi service also owns
 > `wlan0`, so free it first (toggle Wi‑Fi off, or `su -c svc wifi disable`).
@@ -38,15 +39,18 @@ bordered cards, generous spacing):
 - **Status** — root check with a colored indicator
 - **Target & mode** — interface (`-i`), BSSID (`-b`), PIN (`-p`), and attack
   mode (`Auto` / Pixie-Dust `-K` / Bruteforce `-B` / Push-button `--pbc`)
-- **Advanced options** — a collapsible panel exposing **every** remaining
-  OneShot parameter: delay (`-d`), vuln-list (`--vuln-list`), and toggles for
-  `-F`, `-X`, `-w`, `--iface-down`, `-l`, `-r`, `--mtk-wifi`, `-v`
-- **Setup** — one-tap payload install (unzips OneShot + binaries)
+- **Advanced options** — a collapsible panel exposing the payload download URL
+  plus **every** remaining OneShot parameter: delay (`-d`), vuln-list
+  (`--vuln-list`), and toggles for `-F`, `-X`, `-w`, `--iface-down`, `-l`,
+  `-r`, `--mtk-wifi`, `-v`
+- **Setup** — payload status with a download progress bar (automatic; a
+  re-download button is available as a fallback)
 - **Console** — a live, monospace **command preview** plus a dark,
   auto-scrolling, color-coded log with Start / Stop
 
-All settings are **persisted** (via `shared_preferences`) and restored on next
-launch.
+On launch the app **automatically** checks root and downloads + installs the
+payload if it isn't already present. All settings are **persisted** (via
+`shared_preferences`) and restored on next launch.
 
 ---
 
@@ -57,43 +61,42 @@ lib/
   main.dart                 app + theme entry
   theme.dart                calm Material 3 theme
   root_shell.dart           run commands via su, stream output
-  payload_installer.dart    unzip assets/payload.zip -> support dir + chmod
-  oneshot_controller.dart   state + command building (ChangeNotifier)
+  payload_manager.dart      download payload.zip -> support dir + chmod
+  oneshot_settings.dart     all OneShot params + persistence + arg building
+  oneshot_controller.dart   state, auto-setup, run/stop (ChangeNotifier)
   screens/home_screen.dart  the UI
   widgets/console_view.dart auto-scrolling log console
-assets/payload.zip          (generated) OneShot + arm64 binaries — git-ignored
-scripts/prepare_assets.sh   builds payload.zip
+scripts/setup_android.sh    generate android/ host + inject permissions
+scripts/prepare_assets.sh   build dist/payload.zip for a GitHub release
 ```
 
-The Android host folder (`android/`) is **not committed** — generate it once
-with `flutter create .` (see below).
+The Android host folder (`android/`) is **not committed** —
+`scripts/setup_android.sh` generates it and adds permissions automatically.
 
 ---
 
-## Build
+## Build the APK
 
 ```bash
 # 0. Install Flutter (https://docs.flutter.dev) and an Android SDK.
 
-# 1. Generate the Android host project (creates android/).
-flutter create --org run.taleb --project-name oneshot --platforms=android .
+# 1. Generate the android/ host + permissions (automatic, idempotent).
+./scripts/setup_android.sh
 
-# 2. Build the payload (clones OneShot; you supply the arm64 binaries).
-./scripts/prepare_assets.sh
-
-# 3. Fetch packages and build.
+# 2. Fetch packages and build. (No binaries needed here — small APK.)
 flutter pub get
 flutter build apk --release
 #   -> build/app/outputs/flutter-apk/app-release.apk
 ```
 
-After `flutter create`, add these to
-`android/app/src/main/AndroidManifest.xml` (inside `<manifest>`):
-```xml
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+### One-time: publish the payload the app will download
+```bash
+./scripts/prepare_assets.sh      # clones OneShot; you add arm64 binaries
+gh release create v0.1.0 dist/payload.zip   # upload payload.zip to a release
 ```
+The app's default download URL is
+`https://github.com/AzizDXT/Wifite2-app/releases/latest/download/payload.zip`
+(editable in **Advanced options**).
 
 ### Install on the rooted Pixel
 ```bash
@@ -102,13 +105,13 @@ flutter install            # or: adb install -r build/app/outputs/flutter-apk/ap
 
 ---
 
-## Run
+## Run (everything automatic)
 
-1. Open the app → **Check** (grant the su prompt).
-2. **Install** the payload.
-3. Free `wlan0` (Wi‑Fi off, or `su -c svc wifi disable`).
-4. Pick the interface (`wlan0`) and attack mode → **Start**.
-5. Watch the console; **Stop** kills OneShot and its `wpa_supplicant`.
+1. Open the app — it **auto-checks root** and **auto-downloads + installs** the
+   payload (progress shown in Setup).
+2. Free `wlan0` (Wi‑Fi off, or `su -c svc wifi disable`).
+3. Pick the interface (`wlan0`) and attack mode → **Start**.
+4. Watch the console; **Stop** kills OneShot and its `wpa_supplicant`.
 
 ---
 
@@ -119,17 +122,16 @@ flutter install            # or: adb install -r build/app/outputs/flutter-apk/ap
 
 - **analyze** — `flutter pub get`, format check (informational), `flutter
   analyze`, and `flutter test` (widget smoke test).
-- **build-apk** — generates the `android/` host on the fly, uses a
-  **placeholder** `payload.zip`, builds a debug APK, and uploads it as an
-  artifact. This is a *compile-check only* — the CI APK has no real binaries
-  and won't function. Build a working APK locally with real arm64 binaries
-  (see [Build](#build)).
+- **build-apk** — runs `scripts/setup_android.sh` to generate the host + add
+  permissions, builds a debug APK, and uploads it as an artifact. The APK is
+  functional once the runtime `payload.zip` is published (see above).
 
 ## How it works
 
-`OneShotController` builds `su -c "python3 oneshot.py -i wlan0 -K …"` and
-streams stdout/stderr into the console via `dart:io` `Process`.
-`PayloadInstaller` unzips the bundled `assets/payload.zip` into the app's
-private support dir and `chmod 755` the binaries (Android can't exec directly
-from read-only APK assets). OneShot runs as **root**, letting it spawn
-`wpa_supplicant` and run `pixiewps`.
+On launch `OneShotController.autoSetup()` checks root and, if the payload is
+missing, `PayloadManager` downloads `payload.zip` (with progress), unzips it
+into the app's private support dir, and `chmod 755` the binaries (Android can't
+exec from read-only locations). Start then runs
+`su -c "python3 oneshot.py …"` — built from the persisted `OneShotSettings` —
+and streams stdout/stderr into the console via `dart:io` `Process`. OneShot
+runs as **root**, letting it spawn `wpa_supplicant` and run `pixiewps`.

@@ -15,9 +15,9 @@ build/
 /windows/
 /web/
 
-# Bundled payload (OneShot source + arm64 binaries) — built locally by
-# scripts/prepare_assets.sh, NOT committed
-assets/payload.zip
+# Release payload (OneShot source + arm64 binaries) — built by
+# scripts/prepare_assets.sh and uploaded to a GitHub release, NOT committed
+/dist/
 
 # Vendored external sources / temp
 external/

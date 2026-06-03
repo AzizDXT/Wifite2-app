@@ -1,2 +1,0 @@
-# payload.zip (OneShot source + arm64 binaries) is generated here by
-# scripts/prepare_assets.sh before building. It is intentionally git-ignored.
