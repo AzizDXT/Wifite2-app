@@ -36,10 +36,17 @@ A single calm screen (Material 3, slate-teal accent, soft off-white canvas,
 bordered cards, generous spacing):
 
 - **Status** — root check with a colored indicator
-- **Configuration** — interface, optional target BSSID, attack-mode segmented
-  control (Pixie-Dust `-K` / Bruteforce `-B` / PBC `--pbc`)
+- **Target & mode** — interface (`-i`), BSSID (`-b`), PIN (`-p`), and attack
+  mode (`Auto` / Pixie-Dust `-K` / Bruteforce `-B` / Push-button `--pbc`)
+- **Advanced options** — a collapsible panel exposing **every** remaining
+  OneShot parameter: delay (`-d`), vuln-list (`--vuln-list`), and toggles for
+  `-F`, `-X`, `-w`, `--iface-down`, `-l`, `-r`, `--mtk-wifi`, `-v`
 - **Setup** — one-tap payload install (unzips OneShot + binaries)
-- **Console** — dark, auto-scrolling, color-coded log with Start / Stop
+- **Console** — a live, monospace **command preview** plus a dark,
+  auto-scrolling, color-coded log with Start / Stop
+
+All settings are **persisted** (via `shared_preferences`) and restored on next
+launch.
 
 ---
 

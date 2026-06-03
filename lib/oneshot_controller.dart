@@ -1,42 +1,52 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'oneshot_settings.dart';
 import 'payload_installer.dart';
 import 'root_shell.dart';
 
-enum AttackMode { pixieDust, bruteforce, pushButton }
-
-extension AttackModeX on AttackMode {
-  String get flag => switch (this) {
-        AttackMode.pixieDust => '-K',
-        AttackMode.bruteforce => '-B',
-        AttackMode.pushButton => '--pbc',
-      };
-}
-
-/// Holds UI state and drives OneShot through a root shell.
+/// Holds UI state + persisted [OneShotSettings] and drives OneShot via root.
 class OneShotController extends ChangeNotifier {
+  static const _prefsKey = 'oneshot.settings.v1';
+
+  OneShotSettings settings = OneShotSettings();
+  bool loaded = false;
   bool? rootGranted; // null = not checked yet
   bool installed = false;
   bool running = false;
-
-  String iface = 'wlan0';
-  String bssid = '';
-  AttackMode mode = AttackMode.pixieDust;
 
   final List<String> log = [];
 
   Directory? _payload;
   Process? _proc;
+  SharedPreferences? _prefs;
 
-  void _log(String line) {
-    log.add(line);
+  /// The exact OneShot invocation that Start will run (for the live preview).
+  String get commandPreview => 'oneshot.py ${settings.buildFlags()}';
+
+  Future<void> load() async {
+    _prefs = await SharedPreferences.getInstance();
+    final s = _prefs!.getString(_prefsKey);
+    if (s != null) {
+      try {
+        settings = OneShotSettings.fromJson(s);
+      } catch (_) {/* keep defaults on corrupt data */}
+    }
+    loaded = true;
     notifyListeners();
   }
 
-  void setMode(AttackMode m) {
-    mode = m;
+  /// Mutate settings, persist, and rebuild. Used by every input.
+  void update(void Function(OneShotSettings) change) {
+    change(settings);
+    _prefs?.setString(_prefsKey, settings.toJson());
+    notifyListeners();
+  }
+
+  void _log(String line) {
+    log.add(line);
     notifyListeners();
   }
 
@@ -67,12 +77,9 @@ class OneShotController extends ChangeNotifier {
       return;
     }
     final base = _payload!.path;
-    final flags = StringBuffer(mode.flag);
-    if (bssid.trim().isNotEmpty) flags.write(' -b ${bssid.trim()}');
-
     final cmd = 'cd $base && export PATH=$base/bin:\$PATH && '
         'export PYTHONDONTWRITEBYTECODE=1 && '
-        '$base/bin/python3 $base/oneshot.py -i $iface $flags';
+        '$base/bin/python3 $base/oneshot.py ${settings.buildFlags()}';
 
     _log('[*] $cmd');
     running = true;
@@ -88,8 +95,6 @@ class OneShotController extends ChangeNotifier {
 
   Future<void> stop() async {
     _log('[*] Stopping oneshot...');
-    // OneShot spawns its own wpa_supplicant; reap both. SIGINT first so it
-    // can restore the interface, then force-kill.
     await RootShell.run(
       "pkill -INT -f oneshot.py 2>/dev/null; sleep 1; "
       "pkill -f oneshot.py 2>/dev/null; "
