@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'run.taleb.wifite'
+    namespace 'run.taleb.oneshot'
     compileSdk 34
 
     defaultConfig {
-        applicationId "run.taleb.wifite"
+        applicationId "run.taleb.oneshot"
         minSdk 26          // Android 8.0 — covers all rooted Pixels
         targetSdk 34
         versionCode 1
@@ -29,10 +29,9 @@ android {
     kotlinOptions { jvmTarget = '17' }
     buildFeatures { viewBinding true }
 
-    // The bundled wifite source + ARM binaries live under assets/payload/.
-    // They are produced by scripts/prepare_assets.sh and are NOT stored
-    // uncompressed-only here, but we keep them uncompressed so they can be
-    // extracted and chmod'd at runtime.
+    // The bundled OneShot source + arm64 binaries live under assets/payload/.
+    // They are produced by scripts/prepare_assets.sh. Keep them uncompressed
+    // so they can be extracted and chmod'd at runtime.
     androidResources {
         noCompress 'py', 'so'
     }

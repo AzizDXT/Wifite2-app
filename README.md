@@ -1,30 +1,31 @@
-# Wifite2-app — Android (APK) wrapper for wifite2
+# OneShot-app — Android (APK) wrapper for OneShot
 
-An Android app that bundles the [wifite2](https://github.com/kimocoder/wifite2)
-Python tool plus the ARM tool-binaries it shells out to, extracts them at
-runtime, and runs wifite **as root** against an external monitor-mode adapter —
-streaming its output to a live terminal view. This is the NetHunter-style
-approach: the APK is a *launcher/container* for wifite, not a reimplementation.
+An Android app that bundles the [OneShot](https://github.com/kimocoder/OneShot)
+WPS-attack tool plus the arm64 binaries it needs, extracts them at runtime, and
+runs OneShot **as root**, streaming its output to a live terminal view. The APK
+is a *launcher/container* for OneShot, not a reimplementation.
 
 > ⚠️ **Read [LEGAL.md](LEGAL.md) first.** Authorized testing only.
 
 ---
 
-## ❗ Hard requirements (read before you build)
+## Why OneShot is a good fit for a rooted Pixel
 
-An APK **cannot** create wireless capabilities that the hardware/firmware
-doesn't expose. For wifite to actually work you need **all** of:
+Unlike wifite/aircrack, **OneShot does NOT need monitor mode or packet
+injection.** It performs the Pixie-Dust / WPS attacks through
+`wpa_supplicant` on a normal *managed* interface — so the phone's **internal
+`wlan0` works**, no external USB adapter required.
 
-| # | Requirement | Your case (Pixel 2024, rooted) |
-|---|-------------|--------------------------------|
+| # | Requirement | Pixel 2024 (rooted) |
+|---|-------------|---------------------|
 | 1 | **Root** (`su`) | ✅ you have it |
-| 2 | **Monitor mode + packet injection** | ❌ the Pixel's *internal* Wi‑Fi firmware does **not** support it |
-| 3 | **External USB‑C OTG adapter** that does | ⬅️ **you must add this** — e.g. Alfa AWUS036ACM (MT7612U) or an RTL8812AU dongle. It shows up as `wlan1`. |
-| 4 | **arm64 tool binaries** bundled in the APK | produced by `scripts/prepare_assets.sh` (see below) |
+| 2 | Monitor mode / injection | ❌ not needed by OneShot |
+| 3 | External USB adapter | ❌ not required (internal `wlan0` is fine) |
+| 4 | **arm64 binaries** in the APK | python3, wpa_supplicant, pixiewps, iw — added by `scripts/prepare_assets.sh` |
 
-Without #2/#3 the app will launch and run wifite, but wifite will report it
-can't put the interface into monitor mode. **The external adapter is not
-optional on a Pixel.**
+> Note: OneShot starts its *own* `wpa_supplicant` on the interface. Android's
+> system Wi‑Fi service also controls `wlan0`, so you may need to free it first
+> (e.g. toggle Wi‑Fi off, or `su -c svc wifi disable`) before tapping Start.
 
 ---
 
@@ -35,11 +36,11 @@ app/                         Android (Kotlin) wrapper
   src/main/java/.../RootShell.kt      run commands via su, stream output
   src/main/java/.../AssetInstaller.kt extract assets/payload -> filesDir
   src/main/java/.../MainActivity.kt   UI: check root / install / start / stop
-  src/main/assets/payload/            (generated) wifite + bin/ arm64 tools
-scripts/prepare_assets.sh    fetch wifite source + remind you about binaries
+  src/main/assets/payload/            (generated) oneshot.py + bin/ arm64 tools
+scripts/prepare_assets.sh    fetch OneShot source + remind you about binaries
 ```
 
-The `payload/` dir is **git-ignored** — it is built locally, not committed.
+The `payload/` dir is **git-ignored** — built locally, not committed.
 
 ---
 
@@ -49,15 +50,14 @@ The `payload/` dir is **git-ignored** — it is built locally, not committed.
 ```bash
 ./scripts/prepare_assets.sh
 ```
-This clones the wifite source into `app/src/main/assets/payload/`. Then **you**
-drop the **arm64** binaries it lists into `payload/bin/` (python3, aircrack-ng,
-airodump-ng, aireplay-ng, airmon-ng, reaver, wash, hcxdumptool,
-hcxpcapngtool, tshark, iw, ip, hashcat…). Easiest sources: a Kali NetHunter
-chroot's `/usr/bin`, or `pkg install` under Termux then copy `$PREFIX/bin` +
-the libs they link.
+This clones the OneShot source into `app/src/main/assets/payload/`. Then **you**
+drop the **arm64** binaries it lists into `payload/bin/` (`python3`,
+`wpa_supplicant`, `pixiewps`, `iw`). Easiest source: install them under Termux
+(`pkg install python pixiewps wpa-supplicant iw`) and copy `$PREFIX/bin/*` plus
+the `$PREFIX/lib/*.so` they link against.
 
 ### 2. Build the APK
-Open in **Android Studio** (Giraffe+) and Run, or from CLI:
+Open in **Android Studio** and Run, or from CLI:
 ```bash
 ./gradlew assembleDebug
 # -> app/build/outputs/apk/debug/app-debug.apk
@@ -73,33 +73,35 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Run
 
-1. Plug the **USB‑C Wi‑Fi adapter** into the Pixel (OTG).
-2. Open the app → **Check Root** (grant the su prompt).
-3. **Install Payload** (extracts wifite + binaries to private storage).
-4. Set the interface (usually `wlan1`), add optional args, tap **Start**.
-5. Watch the live log; **Stop** sends SIGINT so wifite restores the interface.
+1. Open the app → **Check Root** (grant the su prompt).
+2. **Install Payload** (extracts OneShot + binaries to private storage).
+3. (If needed) free `wlan0`: turn Wi‑Fi off or `su -c svc wifi disable`.
+4. Interface `wlan0`, set flags (default `-K` = Pixie Dust), tap **Start**.
+5. Watch the live log; **Stop** kills OneShot and its `wpa_supplicant`.
 
-Tip: confirm the adapter first from a root shell —
-`ip link` should list `wlan1`, and `airmon-ng start wlan1` should succeed.
+Common flag combos (put in the Flags field):
+- `-K` — interactive Pixie-Dust (pick a target from the scan)
+- `-b AA:BB:CC:DD:EE:FF -K` — Pixie-Dust a specific BSSID
+- `-b AA:BB:CC:DD:EE:FF -B` — online WPS PIN bruteforce
+- `--pbc` — WPS push-button connect
 
 ---
 
 ## How it works
 
-- `MainActivity` collects the interface/args and asks `RootShell` to run
-  `su -c "python3 Wifite.py -i wlan1 --kill …"`, streaming combined
-  stdout/stderr into the on-screen terminal.
+- `MainActivity` builds `su -c "python3 oneshot.py -i wlan0 -K …"` and streams
+  combined stdout/stderr into the on-screen terminal.
 - `AssetInstaller` copies the bundled `assets/payload` tree into the app's
   private `filesDir` and `chmod +x` the binaries (Android can't execute
   binaries directly from the read-only APK assets).
-- wifite runs as **root** (not as the app uid), which is what lets it drive
-  `airmon-ng`/`airodump-ng` against the external adapter.
+- OneShot runs as **root**, which lets it spawn `wpa_supplicant` and run
+  `pixiewps` against the target.
 
 ---
 
 ## Why not Chaquopy / pure in-process Python?
 
-Chaquopy can embed Python in the APK, but that interpreter runs as the *app's*
-uid — it cannot reconfigure network interfaces. wifite fundamentally needs
-**root** and external CLI tools, so we run it through `su` instead. The
-trade-off is that you must supply matching **arm64** binaries.
+Chaquopy embeds Python in the APK, but that interpreter runs as the *app's*
+uid and can't drive `wpa_supplicant` on the interface. OneShot needs **root**
+plus the `wpa_supplicant`/`pixiewps`/`iw` CLIs, so we run it through `su` and
+ship matching **arm64** binaries.

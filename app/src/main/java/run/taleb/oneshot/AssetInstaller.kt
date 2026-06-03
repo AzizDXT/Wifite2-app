@@ -1,10 +1,10 @@
-package run.taleb.wifite
+package run.taleb.oneshot
 
 import android.content.Context
 import java.io.File
 
 /**
- * Extracts the bundled `assets/payload/` tree (wifite source + ARM binaries)
+ * Extracts the bundled `assets/payload/` tree (OneShot source + arm64 binaries)
  * into the app's private files dir and marks the binaries executable.
  */
 object AssetInstaller {

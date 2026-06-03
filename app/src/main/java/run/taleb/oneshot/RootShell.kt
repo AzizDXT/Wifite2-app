@@ -1,4 +1,4 @@
-package run.taleb.wifite
+package run.taleb.oneshot
 
 import java.io.OutputStreamWriter
 

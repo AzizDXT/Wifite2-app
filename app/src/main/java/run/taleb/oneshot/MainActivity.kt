@@ -1,9 +1,9 @@
-package run.taleb.wifite
+package run.taleb.oneshot
 
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import run.taleb.wifite.databinding.ActivityMainBinding
+import run.taleb.oneshot.databinding.ActivityMainBinding
 import java.io.File
 import java.io.OutputStreamWriter
 import kotlin.concurrent.thread
@@ -18,12 +18,14 @@ class MainActivity : AppCompatActivity() {
         b = ActivityMainBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        b.ifaceInput.setText("wlan1")
+        // OneShot uses wpa_supplicant on a managed interface — the internal
+        // wlan0 works on a rooted phone; no monitor mode / external adapter.
+        b.ifaceInput.setText("wlan0")
 
         b.btnCheck.setOnClickListener { checkRoot() }
         b.btnInstall.setOnClickListener { installPayload() }
-        b.btnStart.setOnClickListener { startWifite() }
-        b.btnStop.setOnClickListener { stopWifite() }
+        b.btnStart.setOnClickListener { startOneShot() }
+        b.btnStop.setOnClickListener { stopOneShot() }
     }
 
     private fun log(line: String) = runOnUiThread {
@@ -49,14 +51,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startWifite() {
+    private fun startOneShot() {
         if (running) { log("[!] Already running"); return }
 
-        val iface = b.ifaceInput.text.toString().trim().ifEmpty { "wlan1" }
+        val iface = b.ifaceInput.text.toString().trim().ifEmpty { "wlan0" }
         val extra = b.argsInput.text.toString().trim()
         val payload = File(filesDir, AssetInstaller.PAYLOAD)
 
-        if (!File(payload, "Wifite.py").exists()) {
+        if (!File(payload, "oneshot.py").exists()) {
             log("[!] Payload not installed — tap \"Install Payload\" first."); return
         }
 
@@ -64,12 +66,14 @@ class MainActivity : AppCompatActivity() {
         thread {
             try {
                 val base = payload.absolutePath
+                // Default to interactive Pixie Dust (-K). The user can override
+                // or add flags (e.g. -b <bssid>, -B, --pbc) via the args field.
+                val flags = extra.ifEmpty { "-K" }
                 val cmd = buildString {
                     append("cd $base && ")
                     append("export PATH=$base/bin:\$PATH && ")
                     append("export PYTHONDONTWRITEBYTECODE=1 && ")
-                    append("$base/bin/python3 $base/Wifite.py -i $iface --kill")
-                    if (extra.isNotEmpty()) append(" $extra")
+                    append("$base/bin/python3 $base/oneshot.py -i $iface $flags")
                 }
                 log("[*] $cmd")
                 val p = ProcessBuilder("su").redirectErrorStream(true).start()
@@ -77,7 +81,7 @@ class MainActivity : AppCompatActivity() {
                     w.write(cmd); w.write("\nexit\n"); w.flush()
                     p.inputStream.bufferedReader().forEachLine { log(it) }
                 }
-                log("[*] wifite exited (${p.waitFor()})")
+                log("[*] oneshot exited (${p.waitFor()})")
             } catch (e: Exception) {
                 log("[!] Error: ${e.message}")
             } finally {
@@ -86,12 +90,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopWifite() {
-        log("[*] Stopping wifite (SIGINT for clean teardown)...")
+    private fun stopOneShot() {
+        log("[*] Stopping oneshot...")
         thread {
-            // wifite traps SIGINT to restore the interface; fall back to TERM.
-            RootShell.stream("pkill -INT -f Wifite.py 2>/dev/null; " +
-                    "sleep 2; pkill -f Wifite.py 2>/dev/null; true") { log(it) }
+            // OneShot spawns its own wpa_supplicant; clean both up.
+            RootShell.stream(
+                "pkill -INT -f oneshot.py 2>/dev/null; sleep 1; " +
+                "pkill -f oneshot.py 2>/dev/null; " +
+                "pkill -f 'wpa_supplicant.*p2p-dev' 2>/dev/null; true"
+            ) { log(it) }
             running = false
         }
     }

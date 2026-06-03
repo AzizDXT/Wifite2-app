@@ -9,7 +9,8 @@ captures/
 *.aab
 *.keystore
 
-# Bundled payload (fetched locally by scripts/prepare_assets.sh — NOT committed)
+# Bundled payload (OneShot source + arm64 binaries) — fetched locally by
+# scripts/prepare_assets.sh, NOT committed
 app/src/main/assets/payload/
 
 # Vendored external sources
