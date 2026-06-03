@@ -102,6 +102,13 @@ resolution, adds `oneshot.py`, and zips it. No device or manual copying.
 # build AND publish to a GitHub release (so the default URL resolves):
 PUBLISH=1 TAG=v0.1.0 ./scripts/build_payload.sh
 ```
+
+**Or fully automatic via CI:** push a tag and GitHub Actions builds + publishes
+the payload for you (no local steps):
+```bash
+git tag v0.1.0 && git push origin v0.1.0   # triggers .github/workflows/release.yml
+```
+(Also runnable from the Actions tab via *workflow_dispatch*.)
 The app's default download URL is
 `https://github.com/AzizDXT/Wifite2-app/releases/latest/download/payload.zip`
 (editable in **Advanced options**). The binaries are launched with

@@ -1,0 +1,50 @@
+name: Release payload
+
+# Builds dist/payload.zip on a GitHub runner (which CAN fetch the Termux
+# aarch64 binaries) and publishes it as a release asset, so the app's default
+# download URL (releases/latest/download/payload.zip) resolves — no more 404.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create/update'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  payload:
+    name: Build & publish payload
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build payload.zip
+        run: bash ./scripts/build_payload.sh
+
+      - name: Verify the archive
+        run: |
+          test -f dist/payload.zip
+          echo "Size: $(du -h dist/payload.zip | cut -f1)"
+          unzip -l dist/payload.zip | grep -E 'oneshot\.py|bin/python3|bin/pixiewps' \
+            || { echo '::error::payload.zip is missing required files'; exit 1; }
+
+      - name: Publish release asset
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/payload.zip --clobber
+          else
+            gh release create "$TAG" dist/payload.zip \
+              --title "$TAG" \
+              --notes "OneShot runtime payload (aarch64). Downloaded automatically by the app." \
+              --latest
+          fi
+          echo "Published $TAG -> .../releases/latest/download/payload.zip"
