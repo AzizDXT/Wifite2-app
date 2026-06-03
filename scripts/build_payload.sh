@@ -103,6 +103,7 @@ echo "[+] ${#resolved[@]} packages: ${resolved[*]}"
 for p in "${resolved[@]}"; do
   echo "[*] fetch $p"
   fetch "${URL[$p]}" "$WORK/$p.deb"
+  mkdir -p "$WORK/x/$p"
   dpkg-deb -x "$WORK/$p.deb" "$WORK/x/$p"
 done
 
