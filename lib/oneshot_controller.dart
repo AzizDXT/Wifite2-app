@@ -109,6 +109,7 @@ class OneShotController extends ChangeNotifier {
     }
     final base = _payload!.path;
     final cmd = 'cd $base && '
+        'chmod -R 755 $base/bin 2>/dev/null; '
         'export PATH=$base/bin:\$PATH && '
         'export LD_LIBRARY_PATH=$base/lib:\$LD_LIBRARY_PATH && '
         'export PYTHONHOME=$base && '

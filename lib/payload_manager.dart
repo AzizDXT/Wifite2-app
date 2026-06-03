@@ -4,8 +4,6 @@ import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
-import 'root_shell.dart';
-
 /// Downloads `payload.zip` (OneShot source + arm64 binaries) from a URL,
 /// extracts it into the app's private support dir, and chmods the binaries.
 class PayloadManager {
@@ -76,11 +74,28 @@ class PayloadManager {
       }
       onLog('[+] Extracted ${archive.length} entries');
 
-      // Android can't exec from extracted-but-non-executable files.
-      await RootShell.run('chmod -R 755 ${dest.path}/bin', onLog);
+      // The binaries are app-owned, so chmod needs NO root. Avoid `su` here
+      // (it may be absent / fail) — use the toolbox chmod directly.
+      await _makeExecutable(dest, onLog);
       return dest;
     } finally {
       client.close();
     }
+  }
+
+  /// Marks everything under bin/ executable, without requiring root.
+  static Future<void> _makeExecutable(
+      Directory dest, void Function(String) onLog) async {
+    final bin = '${dest.path}/bin';
+    for (final chmod in const ['/system/bin/chmod', 'chmod', 'toybox']) {
+      try {
+        final args = chmod == 'toybox'
+            ? ['chmod', '-R', '755', bin]
+            : ['-R', '755', bin];
+        final r = await Process.run(chmod, args);
+        if (r.exitCode == 0) return;
+      } catch (_) {/* try next */}
+    }
+    onLog('[!] Could not chmod bin/ (continuing; will retry under root on Start)');
   }
 }

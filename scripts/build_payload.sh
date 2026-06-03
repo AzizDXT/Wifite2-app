@@ -47,9 +47,11 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$DIST" "$PAYLOAD/bin" "$PAYLOAD/lib"
 
 # ---- helpers ---------------------------------------------------------------
-fetch() {  # fetch <url> <out>
-  if command -v curl >/dev/null; then curl -fsSL "$1" -o "$2"
-  elif command -v wget >/dev/null; then wget -qO "$2" "$1"
+fetch() {  # fetch <url> <out>  -> non-zero on HTTP error
+  if command -v curl >/dev/null; then
+    curl -fsSL --retry 3 -A build_payload "$1" -o "$2"
+  elif command -v wget >/dev/null; then
+    wget -q -t 3 -U build_payload -O "$2" "$1"
   else echo "need curl or wget" >&2; exit 1; fi
 }
 
